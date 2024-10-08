@@ -1,20 +1,23 @@
 local log = require("neotest-java.logger")
-local nio = require("nio")
+local compatible_path = require("neotest-java.util.compatible_path")
 
 ---@type neotest-java.ConfigOpts
 local default_config = {
-	ignore_wrapper = false,
-	junit_jar = vim.fn.stdpath("data") .. "/neotest-java/junit-platform-console-standalone-1.10.1.jar",
+	junit_jar = compatible_path(vim.fn.stdpath("data") .. "/neotest-java/junit-platform-console-standalone-1.10.1.jar"),
+	incremental_build = true,
 }
 
 ---@type neotest-java.Context
 local context = { root = nil, config = default_config }
 
----@type neotest-java.ContextHolder
+---@class neotest-java.ContextHolder
 return {
 	--
 	get_context = function()
 		return context
+	end,
+	config = function()
+		return context.config
 	end,
 	set_opts = function(opts)
 		context.config = vim.tbl_extend("force", context.config, opts)
@@ -26,14 +29,9 @@ return {
 }
 
 ---@class neotest-java.ConfigOpts
----@field ignore_wrapper boolean
 ---@field junit_jar string
+---@field incremental_build boolean
 
 ---@class neotest-java.Context
 ---@field config neotest-java.ConfigOpts
 ---@field root string|nil
----
----@class neotest-java.ContextHolder
----@field get_context fun(): neotest-java.Context
----@field set_opts fun(opts: neotest-java.ConfigOpts)
----@field set_root fun(root: string)

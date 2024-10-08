@@ -1,5 +1,3 @@
----@diagnostic disable: undefined-doc-name, duplicate-doc-field, duplicate-set-field
-
 local File = require("neotest.lib.file")
 
 local file_checker = require("neotest-java.core.file_checker")
@@ -14,7 +12,7 @@ local ch = require("neotest-java.context_holder")
 local detect_project_type = require("neotest-java.util.detect_project_type")
 
 local check_junit_jar = function(filepath)
-	local exists, err = File.exists(filepath)
+	local exists, _ = File.exists(filepath)
 	assert(
 		exists,
 		([[
@@ -25,76 +23,36 @@ local check_junit_jar = function(filepath)
 	)
 end
 
----@class neotest.Adapter
-NeotestJavaAdapter = {
+---@type neotest.Adapter
+local NeotestJavaAdapter = {
 	name = "neotest-java",
-}
+	filter_dir = dir_filter.filter_dir,
+	is_test_file = file_checker.is_test_file,
+	discover_positions = position_discoverer.discover_positions,
+	results = result_builder.build_results,
+	root = function(dir)
+		local root = root_finder.find_root(dir)
+		if root then
+			ch.set_root(root)
+		end
+		return root
+	end,
+	build_spec = function(args)
+		check_junit_jar(ch.get_context().config.junit_jar)
 
----Find the project root directory given a current directory to work from.
----Should no root be found, the adapter can still be used in a non-project context if a test file matches.
----@async
----@param dir string @Directory to treat as cwd
----@return string | nil @Absolute root dir of test suite
-function NeotestJavaAdapter.root(dir)
-	local root = root_finder.find_root(dir)
-	if root then
-		ch.set_root(root)
-	end
-	return root
-end
+		-- TODO: find a way to avoid to make this steps every time
 
----Filter directories when searching for test files
----@async
----@param name string Name of directory
----@param rel_path string Path to directory, relative to root
----@param root string Root directory of project
----@return boolean
-function NeotestJavaAdapter.filter_dir(name, rel_path, root)
-	return dir_filter.filter_dir(name, rel_path, root)
-end
+		-- find root
+		local root = ch.get_context().root or root_finder.find_root(vim.fn.getcwd())
+		assert(root, "root directory not found")
 
----@async
----@param file_path string
----@return boolean
-function NeotestJavaAdapter.is_test_file(file_path)
-	return file_checker.is_test_file(file_path)
-end
+		-- detect project type
+		local project_type = detect_project_type(root)
 
----Given a file path, parse all the tests within it.
----@async
----@param file_path string Absolute file path
----@return neotest.Tree | nil
-function NeotestJavaAdapter.discover_positions(file_path)
-	return position_discoverer.discover_positions(file_path)
-end
-
----@param args neotest.RunArgs
----@return nil | neotest.RunSpec | neotest.RunSpec[]
-function NeotestJavaAdapter.build_spec(args)
-	local self = NeotestJavaAdapter
-	check_junit_jar(ch.get_context().config.junit_jar)
-
-	-- TODO: find a way to avoid to make this steps every time
-
-	-- find root
-	local root = ch.get_context().root or self.root(vim.fn.getcwd())
-	assert(root, "root directory not found")
-
-	-- detect project type
-	local project_type = detect_project_type(root)
-
-	-- build spec
-	return spec_builder.build_spec(args, project_type, ch.get_context().config)
-end
-
----@async
----@param spec neotest.RunSpec
----@param result neotest.StrategyResult
----@param tree neotest.Tree
----@return table<string, neotest.Result>
-function NeotestJavaAdapter.results(spec, result, tree)
-	return result_builder.build_results(spec, result, tree)
-end
+		-- build spec
+		return spec_builder.build_spec(args, project_type, ch.get_context().config)
+	end,
+};
 
 -- on init
 (function()
@@ -102,7 +60,7 @@ end
 
 	-- create data directory if it doesn't exist
 	local data_dir = vim.fn.stdpath("data") .. "/neotest-java"
-	os.execute("mkdir -p " .. data_dir)
+	vim.uv.fs_mkdir(data_dir, 493)
 end)()
 
 setmetatable(NeotestJavaAdapter, {
